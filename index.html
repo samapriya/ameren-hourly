@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ameren Rate Analysis Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js, date adapter, zoom plugin, and Hammer.js for touch gestures -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    
+    <!-- FileSaver.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        /* Light Mode (Default) */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+            color: #1e2937;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 1rem;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.3); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.5); }
+        input[type="date"]::-webkit-calendar-picker-indicator, select { filter: none; cursor: pointer; }
+        .analysis-btn.active { background-color: #4f46e5; color: white; }
+        
+        /* Dark Mode */
+        body.dark {
+            background-color: #000000;
+            color: #e2e8f0;
+        }
+        body.dark .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        body.dark input, body.dark select {
+            background-color: rgba(51, 65, 85, 0.5);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #e2e8f0;
+        }
+        body.dark .text-slate-900 { color: #fff; }
+        body.dark .text-slate-800 { color: #e2e8f0; }
+        body.dark .text-slate-700 { color: #94a3b8; }
+        body.dark .text-slate-600 { color: #cbd5e1; }
+        body.dark .text-slate-500 { color: #94a3b8; }
+        body.dark .bg-slate-200 { background-color: rgba(51, 65, 85, 0.7); }
+        body.dark .bg-slate-200:hover { background-color: rgba(71, 85, 105, 0.8); }
+        body.dark .analysis-btn.active { background-color: #818cf8; color: black; }
+        body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+        body.dark .border-red-200 { border-color: rgba(255, 100, 100, 0.3); }
+        body.dark .bg-red-100 { background-color: rgba(153, 27, 27, 0.3); }
+        body.dark .text-red-800 { color: #fecaca; }
+        body.dark .text-red-600 { color: #fda4af; }
+        body.dark .text-green-600 { color: #86efac; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-7xl mx-auto">
+        <main class="glass-card p-6 md:p-8 space-y-6">
+            <!-- Header -->
+            <header class="relative text-center">
+                <h1 class="text-3xl md:text-4xl font-bold text-slate-900">Ameren Rate Analysis Dashboard</h1>
+                <p class="text-slate-600 mt-1">Advanced tools for exploring electricity price trends.</p>
+                <!-- Dark Mode Toggle -->
+                <div class="absolute top-0 right-0">
+                    <button id="theme-toggle" class="p-2 rounded-full text-slate-500 hover:bg-slate-200 focus:outline-none">
+                        <svg id="theme-icon-light" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                        <svg id="theme-icon-dark" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Loading Spinner -->
+            <div id="loader" class="flex flex-col items-center justify-center p-8 text-slate-700">
+                <svg class="animate-spin h-10 w-10 text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p class="mt-4 text-lg">Loading historical rate data...</p>
+            </div>
+
+            <!-- Main Content -->
+            <div id="content" class="hidden space-y-6">
+                <!-- Info Panel -->
+                <div class="glass-card p-6 flex flex-col md:flex-row items-center gap-6">
+                    <div class="flex-shrink-0 w-full md:w-1/3">
+                        <img src="https://i.imgur.com/vTfbTN1.png" alt="Electricity infrastructure with power lines at sunset" class="rounded-lg shadow-lg w-full h-auto object-cover">
+                    </div>
+                    <div class="flex-grow">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-2">Welcome to the Rate Explorer</h2>
+                        <p class="text-slate-600">
+                            This interactive dashboard provides a comprehensive platform for analyzing Ameren's hourly electricity rates. You can visualize long-term price trends, compare data across different years and months, and pinpoint specific periods of interest using the zoomable main chart. Dive deeper with specialized tools to identify daily patterns, peak usage hours, and price extremes. All data and visualizations can be exported for your records.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Controls: Date Pickers and Main Actions -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                    <div>
+                        <label for="startDate" class="block text-sm font-medium text-slate-700">Start Date</label>
+                        <input type="date" id="startDate" class="mt-1 w-full rounded-md px-3 py-2 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label for="endDate" class="block text-sm font-medium text-slate-700">End Date</label>
+                        <input type="date" id="endDate" class="mt-1 w-full rounded-md px-3 py-2 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                     <button id="resetZoom" class="col-span-1 bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded-md transition duration-200">Reset Zoom</button>
+                    <button id="exportGraph" class="col-span-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-md transition duration-200">Export Graph</button>
+                    <button id="exportJson" class="col-span-1 bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2 px-4 rounded-md transition duration-200">Export JSON</button>
+                </div>
+
+                <!-- Main Chart container -->
+                <div class="relative h-96">
+                    <canvas id="rateChart"></canvas>
+                </div>
+
+                <!-- Analysis Panel -->
+                <div class="glass-card p-4 space-y-4">
+                    <h2 class="text-xl font-bold text-slate-900">Analysis Tools</h2>
+                    <div class="flex flex-wrap gap-2" id="analysis-controls">
+                        <button class="analysis-btn px-4 py-2 text-sm rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300 transition active" data-view="today">Today's Graph</button>
+                        <button class="analysis-btn px-4 py-2 text-sm rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300 transition" data-view="upcoming">Upcoming Day</button>
+                        <button class="analysis-btn px-4 py-2 text-sm rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300 transition" data-view="yoy">Year over Year</button>
+                        <button class="analysis-btn px-4 py-2 text-sm rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300 transition" data-view="mom">Monthly Averages</button>
+                        <button class="analysis-btn px-4 py-2 text-sm rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300 transition" data-view="extrema">Price Extrema</button>
+                        <button class="analysis-btn px-4 py-2 text-sm rounded-md bg-slate-200 text-slate-800 hover:bg-slate-300 transition" data-view="peak">Peak Hour Analysis</button>
+                    </div>
+
+                    <!-- Dynamic controls for panels -->
+                    <div id="dynamic-controls" class="flex flex-wrap gap-4 items-end pt-2"></div>
+                    
+                    <!-- Analysis Display Area -->
+                    <div id="analysis-display" class="min-h-[24rem] relative">
+                        <canvas id="analysisChart"></canvas>
+                        <div id="extrema-display" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 text-center"></div>
+                    </div>
+                </div>
+
+            </div>
+            <div id="error" class="hidden text-center p-8 bg-red-100 border border-red-200 rounded-lg"><h3 class="text-xl font-semibold text-red-800">Failed to load data</h3><p id="errorMessage" class="text-red-600 mt-2"></p></div>
+        </main>
+    </div>
+
+<script>
+    // --- CONFIGURATION ---
+    const DATA_URL = 'https://raw.githubusercontent.com/samapriya/ameren-hourly/refs/heads/main/ameren_rates.json';
+
+    // --- DOM ELEMENTS ---
+    const loader = document.getElementById('loader'), content = document.getElementById('content'), errorContainer = document.getElementById('error'), errorMessage = document.getElementById('errorMessage'), startDateInput = document.getElementById('startDate'), endDateInput = document.getElementById('endDate'), resetZoomBtn = document.getElementById('resetZoom'), exportGraphBtn = document.getElementById('exportGraph'), exportJsonBtn = document.getElementById('exportJson'), chartCanvas = document.getElementById('rateChart'), analysisControls = document.getElementById('analysis-controls'), dynamicControls = document.getElementById('dynamic-controls'), analysisDisplay = document.getElementById('analysis-display'), analysisChartCanvas = document.getElementById('analysisChart'), extremaDisplay = document.getElementById('extrema-display'), themeToggle = document.getElementById('theme-toggle'), themeIconLight = document.getElementById('theme-icon-light'), themeIconDark = document.getElementById('theme-icon-dark');
+    
+    // --- APP STATE ---
+    let mainChart = null, analysisChart = null;
+    let fullDataset = [], availableYears = [], currentFilteredData = [];
+    
+    // --- THEME HANDLING ---
+    function applyTheme(isDark) {
+        document.body.classList.toggle('dark', isDark);
+        themeIconLight.classList.toggle('hidden', isDark);
+        themeIconDark.classList.toggle('hidden', !isDark);
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        updateAllChartsTheme();
+    }
+
+    function getChartThemeOptions() {
+        const isDark = document.body.classList.contains('dark');
+        return {
+            textColor: isDark ? '#e2e8f0' : '#1e2937',
+            gridColor: isDark ? 'rgba(71, 85, 105, 0.5)' : 'rgba(0, 0, 0, 0.05)',
+            legendColor: isDark ? '#e2e8f0' : '#1e2937',
+            mainBorderColor: isDark ? 'rgba(165, 180, 252, 1)' : 'rgba(79, 70, 229, 1)',
+            mainBgColor: isDark ? 'rgba(129, 140, 248, 0.2)' : 'rgba(99, 102, 241, 0.2)',
+        };
+    }
+
+    function updateAllChartsTheme() {
+        const theme = getChartThemeOptions();
+        [mainChart, analysisChart].forEach(chart => {
+            if (chart) {
+                chart.options.scales.x.ticks.color = theme.textColor;
+                chart.options.scales.x.grid.color = theme.gridColor;
+                if (chart.options.scales.y) {
+                    chart.options.scales.y.ticks.color = theme.textColor;
+                    chart.options.scales.y.grid.color = theme.gridColor;
+                }
+                if (chart.options.plugins.legend) {
+                    chart.options.plugins.legend.labels.color = theme.legendColor;
+                }
+                if (chart === mainChart) {
+                     chart.data.datasets[0].borderColor = theme.mainBorderColor;
+                     chart.data.datasets[0].backgroundColor = theme.mainBgColor;
+                }
+                chart.update();
+            }
+        });
+    }
+
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedTheme = localStorage.getItem('theme');
+        applyTheme(savedTheme === 'dark');
+        themeToggle.addEventListener('click', () => applyTheme(!document.body.classList.contains('dark')));
+        initializeApp();
+    });
+
+    async function initializeApp() {
+        try {
+            const rawData = await fetchData();
+            fullDataset = processData(rawData);
+            if (fullDataset.length === 0) throw new Error("No data points found after processing.");
+            
+            availableYears = [...new Set(fullDataset.map(d => d.year))].sort();
+            setupControls();
+            createMainChart();
+            setupAnalysisListeners();
+            renderAnalysisPanel('today'); // Load default panel
+            
+            loader.classList.add('hidden');
+            content.classList.remove('hidden');
+        } catch (err) {
+            console.error("Initialization failed:", err);
+            errorMessage.textContent = `Error: ${err.message}. Please check the browser console for more details.`;
+            loader.classList.add('hidden');
+            errorContainer.classList.remove('hidden');
+        }
+    }
+
+    // --- DATA HANDLING ---
+    async function fetchData() {
+        const response = await fetch(DATA_URL);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return await response.json();
+    }
+
+    function processData(jsonData) {
+        if (!jsonData || !Array.isArray(jsonData.rates)) return [];
+        let data = [];
+        jsonData.rates.forEach(daily => {
+            // Fix: Ensure daily.data is an actual array before trying to iterate it.
+            if (daily && Array.isArray(daily.data)) {
+                daily.data.forEach(hourly => {
+                    // Also ensure hourly is a valid object before accessing its properties
+                    if (hourly && typeof hourly.hour !== 'undefined' && typeof hourly.price !== 'undefined') {
+                        // Ameren data uses hours "01" through "24". JS Date uses 0-23.
+                        // We subtract 1 to align the hours correctly.
+                        const hour = parseInt(hourly.hour, 10) - 1;
+                        const dt = new Date(`${daily.date.substring(0, 10)}T00:00:00`);
+                        
+                        // Check for valid hour (0-23) after conversion
+                        if (!isNaN(hour) && hour >= 0 && hour < 24) {
+                             dt.setHours(hour);
+                            if (!isNaN(dt.getTime())) {
+                                data.push({
+                                    x: dt,
+                                    y: hourly.price * 100,
+                                    year: dt.getFullYear(),
+                                    month: dt.getMonth(),
+                                    day: dt.getDate(),
+                                    hour: dt.getHours()
+                                });
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        return data.sort((a, b) => a.x - b.x);
+    }
+
+    // --- UI & CHART SETUP ---
+    function setupControls() {
+        const firstDate = fullDataset[0].x, lastDate = fullDataset[fullDataset.length - 1].x;
+        const formatDate = (date) => date.toISOString().split('T')[0];
+
+        // Default to the last two years
+        const twoYearsAgo = new Date(lastDate);
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        
+        startDateInput.value = formatDate(twoYearsAgo > firstDate ? twoYearsAgo : firstDate);
+        endDateInput.value = formatDate(lastDate);
+
+        [startDateInput, endDateInput].forEach(input => {
+            input.min = formatDate(firstDate);
+            input.max = formatDate(lastDate);
+            input.addEventListener('change', () => {
+                updateMainChart();
+                // Rerender analysis panel to reflect new date range
+                const activeBtn = document.querySelector('.analysis-btn.active');
+                if (activeBtn) renderAnalysisPanel(activeBtn.dataset.view);
+            });
+        });
+        resetZoomBtn.addEventListener('click', () => {
+            mainChart?.resetZoom();
+            startDateInput.value = formatDate(twoYearsAgo > firstDate ? twoYearsAgo : firstDate);
+            endDateInput.value = formatDate(lastDate);
+        });
+        exportGraphBtn.addEventListener('click', () => exportChart(mainChart, 'main_chart'));
+        exportJsonBtn.addEventListener('click', exportJson);
+    }
+    
+    function createMainChart() {
+        currentFilteredData = filterDataByDate();
+        const theme = getChartThemeOptions();
+        
+        const onZoomComplete = ({chart}) => {
+            const formatDate = (date) => new Date(date).toISOString().split('T')[0];
+            startDateInput.value = formatDate(chart.scales.x.min);
+            endDateInput.value = formatDate(chart.scales.x.max);
+            const activeBtn = document.querySelector('.analysis-btn.active');
+            if (activeBtn) renderAnalysisPanel(activeBtn.dataset.view);
+        };
+
+        mainChart = new Chart(chartCanvas, {
+            type: 'line',
+            data: { datasets: [{ label: 'Price (cents/kWh)', data: currentFilteredData, borderColor: theme.mainBorderColor, backgroundColor: theme.mainBgColor, borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.1 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: { x: { type: 'time', time: { unit: 'month' }, ticks: { color: theme.textColor }, grid: { color: theme.gridColor } }, y: { ticks: { color: theme.textColor }, grid: { color: theme.gridColor } } },
+                plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false }, zoom: { pan: { enabled: true, mode: 'x' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x', onZoomComplete, onPanComplete: onZoomComplete } } }
+            }
+        });
+    }
+
+    function setupAnalysisListeners() {
+        analysisControls.addEventListener('click', e => {
+            if (e.target.tagName === 'BUTTON') {
+                document.querySelectorAll('.analysis-btn').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                renderAnalysisPanel(e.target.dataset.view);
+            }
+        });
+    }
+    
+    // --- DYNAMIC RENDERING ---
+    function updateMainChart() {
+        if (!mainChart) return;
+        currentFilteredData = filterDataByDate();
+        mainChart.data.datasets[0].data = currentFilteredData;
+        mainChart.update();
+    }
+    
+    function renderAnalysisPanel(view) {
+        if (analysisChart) analysisChart.destroy();
+        extremaDisplay.innerHTML = '';
+        extremaDisplay.classList.add('hidden');
+        analysisChartCanvas.classList.remove('hidden');
+        dynamicControls.innerHTML = '';
+
+        const baseColors = ['#818cf8', '#f472b6', '#4ade80', '#fb923c', '#60a5fa', '#c084fc'];
+        const theme = getChartThemeOptions();
+        
+        switch(view) {
+            case 'today':
+                const today = getCurrentCentralDateParts();
+                const todayData = fullDataset.filter(d => 
+                    d.year === today.getFullYear() &&
+                    d.month === today.getMonth() &&
+                    d.day === today.getDate()
+                );
+
+                if (todayData.length === 0) {
+                    analysisChartCanvas.classList.add('hidden');
+                    extremaDisplay.classList.remove('hidden');
+                    extremaDisplay.innerHTML = `<p class="text-slate-500 text-center col-span-2">No data available for today (${today.toLocaleDateString()}).</p>`;
+                    break;
+                }
+
+                dynamicControls.innerHTML = `<h3 class="w-full text-lg font-semibold text-slate-800">Hourly Rates for ${today.toLocaleDateString()} (Today)</h3>`;
+
+                analysisChart = new Chart(analysisChartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: todayData.map(d => `${d.hour}:00`),
+                        datasets: [{
+                            label: `Price ¢/kWh`,
+                            data: todayData.map(d => d.y),
+                            borderColor: baseColors[3],
+                            backgroundColor: 'rgba(251, 146, 60, 0.2)',
+                            fill: true,
+                            tension: 0.2,
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { title: { display: true, text: 'Hour of Day' }, ticks: { color: theme.textColor }, grid: { color: theme.gridColor } },
+                            y: { title: { display: true, text: 'Price (cents/kWh)' }, ticks: { color: theme.textColor }, grid: { color: theme.gridColor } }
+                        },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+                break;
+            case 'upcoming':
+                const todayForUpcoming = getCurrentCentralDateParts();
+                const tomorrow = new Date(todayForUpcoming);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+
+                const upcomingData = fullDataset.filter(d => 
+                    d.year === tomorrow.getFullYear() &&
+                    d.month === tomorrow.getMonth() &&
+                    d.day === tomorrow.getDate()
+                );
+
+                if (upcomingData.length === 0) {
+                    analysisChartCanvas.classList.add('hidden');
+                    extremaDisplay.classList.remove('hidden');
+                    extremaDisplay.innerHTML = `<p class="text-slate-500 text-center col-span-2">No data available for the upcoming day (${tomorrow.toLocaleDateString()}).</p>`;
+                    break;
+                }
+
+                dynamicControls.innerHTML = `<h3 class="w-full text-lg font-semibold text-slate-800">Hourly Rates for ${tomorrow.toLocaleDateString()} (Upcoming)</h3>`;
+
+                analysisChart = new Chart(analysisChartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: upcomingData.map(d => `${d.hour}:00`),
+                        datasets: [{
+                            label: `Price ¢/kWh`,
+                            data: upcomingData.map(d => d.y),
+                            borderColor: baseColors[4],
+                            backgroundColor: 'rgba(96, 165, 250, 0.2)',
+                            fill: true,
+                            tension: 0.2,
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { title: { display: true, text: 'Hour of Day' }, ticks: { color: theme.textColor }, grid: { color: theme.gridColor } },
+                            y: { title: { display: true, text: 'Price (cents/kWh)' }, ticks: { color: theme.textColor }, grid: { color: theme.gridColor } }
+                        },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+                break;
+            case 'yoy':
+                dynamicControls.innerHTML = `
+                    <div class="flex-grow"><label class="text-sm">Compare Year:</label><select id="yoy-year1" class="w-full rounded p-1">${availableYears.map(y => `<option>${y}</option>`).join('')}</select></div>
+                    <div class="flex-grow"><label class="text-sm">With Year:</label><select id="yoy-year2" class="w-full rounded p-1">${availableYears.map(y => `<option ${y === availableYears[1] ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
+                    <button id="yoy-reset-zoom" class="bg-gray-500 hover:bg-gray-400 text-white font-semibold py-2 px-4 rounded-md">Reset Zoom</button>`;
+                const yoyRender = () => {
+                    const y1 = document.getElementById('yoy-year1').value;
+                    const y2 = document.getElementById('yoy-year2').value;
+                    const data1 = fullDataset.filter(d => d.year == y1).map(d => ({ x: new Date(2000, d.month, d.day, d.hour), y: d.y }));
+                    const data2 = fullDataset.filter(d => d.year == y2).map(d => ({ x: new Date(2000, d.month, d.day, d.hour), y: d.y }));
+                    renderComparisonChart({ datasets: [ { label: y1, data: data1, borderColor: baseColors[0] }, { label: y2, data: data2, borderColor: baseColors[1] } ], timeUnit: 'month', zoomable: true });
+                };
+                document.getElementById('yoy-year1').onchange = yoyRender;
+                document.getElementById('yoy-year2').onchange = yoyRender;
+                document.getElementById('yoy-reset-zoom').onclick = () => analysisChart?.resetZoom();
+                yoyRender();
+                break;
+            case 'mom':
+                 dynamicControls.innerHTML = `<p class="w-full text-sm text-slate-500">Comparing the average monthly price for each available year.</p>`;
+                 const monthlyAverages = {};
+                 fullDataset.forEach(d => {
+                    if (!monthlyAverages[d.year]) monthlyAverages[d.year] = Array(12).fill(0).map(() => ({ sum: 0, count: 0 }));
+                    monthlyAverages[d.year][d.month].sum += d.y;
+                    monthlyAverages[d.year][d.month].count++;
+                 });
+                 const datasets = Object.keys(monthlyAverages).map((year, i) => ({
+                    label: year,
+                    data: monthlyAverages[year].map(m => m.count > 0 ? m.sum / m.count : null),
+                    borderColor: baseColors[i % baseColors.length],
+                    tension: 0.2,
+                    fill: false
+                 }));
+                 const monthLabels = [...Array(12).keys()].map(m => new Date(0,m).toLocaleString('default',{month:'short'}));
+                 renderComparisonChart({ datasets, labels: monthLabels, isTime: false, xLabel: "Month" });
+                break;
+            case 'extrema':
+                analysisChartCanvas.classList.add('hidden');
+                extremaDisplay.classList.remove('hidden');
+                const data = filterDataByDate();
+                if (data.length > 0) {
+                    const min = data.reduce((prev, curr) => prev.y < curr.y ? prev : curr);
+                    const max = data.reduce((prev, curr) => prev.y > curr.y ? prev : curr);
+                    extremaDisplay.innerHTML = `
+                        <div class="glass-card p-4"><h3 class="font-bold text-lg text-green-600">Lowest Price</h3><p class="text-3xl font-bold">${min.y.toFixed(3)} ¢/kWh</p><p class="text-sm text-slate-500">${min.x.toLocaleString()}</p></div>
+                        <div class="glass-card p-4"><h3 class="font-bold text-lg text-red-600">Highest Price</h3><p class="text-3xl font-bold">${max.y.toFixed(3)} ¢/kWh</p><p class="text-sm text-slate-500">${max.x.toLocaleString()}</p></div>`;
+                }
+                break;
+            case 'peak':
+                dynamicControls.innerHTML = `<p class="w-full text-sm text-slate-500">This chart shows the average price for each hour of the day, calculated from the date range selected above. It helps identify which hours are consistently the most or least expensive.</p>`;
+                const hourlyAvg = Array(24).fill(0).map(() => ({ sum: 0, count: 0 }));
+                filterDataByDate().forEach(d => {
+                    hourlyAvg[d.hour].sum += d.y;
+                    hourlyAvg[d.hour].count++;
+                });
+                const chartData = hourlyAvg.map((h, i) => h.count > 0 ? h.sum / h.count : 0);
+                analysisChart = new Chart(analysisChartCanvas, {
+                    type: 'bar',
+                    data: { labels: Array(24).fill(0).map((_, i) => `${i}:00`), datasets: [{ label: 'Avg Price ¢/kWh', data: chartData, backgroundColor: baseColors[2] }] },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Hour of Day' }, ticks: { color: theme.textColor }, grid: { color: theme.gridColor } }, y: { ticks: { color: theme.textColor }, grid: { color: theme.gridColor } } } }
+                });
+                break;
+        }
+    }
+
+    function renderComparisonChart({ datasets, labels, timeUnit, isTime = true, xLabel = 'Date', zoomable = false }) {
+        if(analysisChart) analysisChart.destroy();
+        const theme = getChartThemeOptions();
+        const options = { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            scales: { y: { ticks: { color: theme.textColor }, grid: { color: theme.gridColor } } }, 
+            plugins: { legend: { labels: { color: theme.legendColor } } } 
+        };
+        if (isTime) {
+            options.scales.x = { type: 'time', time: { unit: timeUnit }, ticks: { color: theme.textColor }, grid: { color: theme.gridColor } };
+        } else {
+            options.scales.x = { title: { display: true, text: xLabel }, ticks: { color: theme.textColor }, grid: { color: theme.gridColor } };
+        }
+        if (zoomable) {
+            options.plugins.zoom = { pan: { enabled: true, mode: 'x' }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' } };
+        }
+        
+        const chartData = { datasets };
+        if (labels) chartData.labels = labels;
+
+        analysisChart = new Chart(analysisChartCanvas, { type: 'line', data: chartData, options });
+    }
+
+    // --- UTILITY FUNCTIONS ---
+    function getCurrentCentralDateParts() {
+        try {
+            // Use Intl.DateTimeFormat to reliably get date parts for the target timezone.
+            const formatter = new Intl.DateTimeFormat('en-CA', { // en-CA gives YYYY-MM-DD format
+                timeZone: 'America/Chicago',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            
+            const parts = formatter.formatToParts(new Date());
+            const year = parts.find(p => p.type === 'year').value;
+            const month = parts.find(p => p.type === 'month').value;
+            const day = parts.find(p => p.type === 'day').value;
+            
+            // This creates a date at midnight in the browser's local timezone, 
+            // but with the correct year, month, and day for Central Time.
+            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        } catch (e) {
+            console.error("Could not determine Central Time, falling back to local time.", e);
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            return now;
+        }
+    }
+    
+    function filterDataByDate() {
+        const start = new Date(startDateInput.value + 'T00:00:00');
+        const end = new Date(endDateInput.value + 'T23:59:59');
+        return fullDataset.filter(d => d.x >= start && d.x <= end);
+    }
+    
+    function exportChart(chartInstance, name) {
+        if (!chartInstance) return;
+        const dataUrl = chartInstance.toBase64Image('image/png', 1);
+        saveAs(dataUrl, `${name}_${new Date().toISOString().slice(0,10)}.png`);
+    }
+    
+    function exportJson() {
+        if (currentFilteredData.length === 0) return;
+        const exportable = currentFilteredData.map(p => ({ datetime: p.x.toISOString(), price_cents_per_kwh: parseFloat(p.y.toFixed(5)) }));
+        const blob = new Blob([JSON.stringify(exportable, null, 2)], { type: 'application/json' });
+        saveAs(blob, `ameren_data_${startDateInput.value}_to_${endDateInput.value}.json`);
+    }
+</script>
+</body>
+</html>
+
+
