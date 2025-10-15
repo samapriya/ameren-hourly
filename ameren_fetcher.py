@@ -32,7 +32,9 @@ class AmerenRateFetcher:
         return {'rates': [], 'last_updated': None}
     
     def save_data(self, data):
-        """Save data to JSON file"""
+        """Save data to JSON file with dates sorted sequentially"""
+        # Sort rates by date before saving
+        data['rates'] = sorted(data['rates'], key=lambda x: x['date'])
         with open(self.output_file, 'w') as f:
             json.dump(data, f, indent=2)
     
@@ -98,19 +100,9 @@ class AmerenRateFetcher:
             ]
             
             results = []
-            completed = 0
-            total = len(tasks)
-            
             for coro in asyncio.as_completed(tasks):
                 result = await coro
                 results.append(result)
-                completed += 1
-                
-                date_str, data, error = result
-                if data:
-                    print(f"✓ {date_str} ({completed}/{total})")
-                else:
-                    print(f"✗ {date_str} - {error} ({completed}/{total})")
             
             return results
     
@@ -145,15 +137,19 @@ class AmerenRateFetcher:
         batch_size = 100
         total_fetched = 0
         total_failed = 0
+        total_batches = (len(dates_to_fetch) + batch_size - 1) // batch_size
         
         for i in range(0, len(dates_to_fetch), batch_size):
             batch = dates_to_fetch[i:i + batch_size]
-            print(f"\n--- Batch {i//batch_size + 1} ({len(batch)} dates) ---")
+            batch_num = i//batch_size + 1
+            print(f"\n--- Batch {batch_num} of {total_batches} ({len(batch)} dates) ---")
             
             # Run async batch
             results = asyncio.run(self.fetch_batch_async(batch))
             
             # Process results
+            batch_success = 0
+            batch_failed = 0
             for date_str, rate_data, error in results:
                 if rate_data:
                     entry = {
@@ -163,13 +159,16 @@ class AmerenRateFetcher:
                     }
                     data['rates'].append(entry)
                     total_fetched += 1
+                    batch_success += 1
                 else:
                     total_failed += 1
+                    batch_failed += 1
             
             # Save progress after each batch
             data['last_updated'] = datetime.now().isoformat()
             self.save_data(data)
-            print(f"Saved progress: {total_fetched} successful, {total_failed} failed")
+            print(f"Batch complete: {batch_success} successful, {batch_failed} failed")
+            print(f"Overall progress: {total_fetched} successful, {total_failed} failed")
         
         print(f"\nBackfill complete! Total fetched: {total_fetched}, Total failed: {total_failed}")
         return data
@@ -196,9 +195,12 @@ class AmerenRateFetcher:
         rate_data = self.fetch_rate_for_date(tomorrow)
         
         if rate_data:
+            # Extract only hourlyPriceDetails, ignore chartBytes (consistent with async fetch)
+            hourly_data = rate_data.get('hourlyPriceDetails', [])
+            
             entry = {
                 'date': tomorrow,
-                'data': rate_data,
+                'data': hourly_data,
                 'fetched_at': datetime.now().isoformat()
             }
             data['rates'].append(entry)
@@ -212,7 +214,7 @@ if __name__ == "__main__":
     fetcher = AmerenRateFetcher(
         output_file='ameren_rates.json',
         concurrent_requests=10,
-        max_retries=3
+        max_retries=5
     )
     
     fetcher.backfill_historical_data('2015-01-01')
